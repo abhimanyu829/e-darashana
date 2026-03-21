@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Academic or project course with immutable timeline",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "section": { "type": "string", "enum": ["academic", "project", "placement", "skills", "business", "other"] },
+        "name": { "type": "string" },
+        "durationDays": { "type": "number" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "dailyStudyHours": { "type": "number" },
+        "isImmutable": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["active", "completed", "archived"] }
+      },
+      "required": ["userId", "name", "startDate", "endDate"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "A subject within a course",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string" },
+        "name": { "type": "string" },
+        "priorityIndex": { "type": "number" },
+        "color": { "type": "string" }
+      },
+      "required": ["courseId", "name"]
+    },
+    "Topic": {
+      "title": "Topic",
+      "description": "Individual learning unit with 24h deadline",
+      "type": "object",
+      "properties": {
+        "subjectId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "active", "completed", "delayed"] },
+        "assignedDate": { "type": "string", "format": "date-time" },
+        "deadline": { "type": "string", "format": "date-time" },
+        "estimatedTime": { "type": "number" },
+        "isLocked": { "type": "boolean" },
+        "delayCount": { "type": "number" },
+        "isCarryForward": { "type": "boolean" }
+      },
+      "required": ["subjectId", "name"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "General task or linked topic execution",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "section": { "type": "string" },
+        "topicId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "status": { "type": "string", "enum": ["todo", "in-progress", "completed", "deferred"] },
+        "canDoToday": { "type": "boolean" },
+        "isDeferred": { "type": "boolean" },
+        "nextAssignedDate": { "type": "string", "format": "date-time" },
+        "productivityImpactScore": { "type": "number" }
+      },
+      "required": ["userId", "title", "status"]
+    },
+    "DailyPlan": {
+      "title": "Daily Plan",
+      "description": "Generated daily schedule",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "activeSubjects": { "type": "array", "items": { "type": "string" } },
+        "totalHours": { "type": "number" }
+      },
+      "required": ["userId", "date"]
+    }
+  },
+  "firestore": {
+    "users": { "schema": "User", "description": "User profiles" },
+    "courses": { "schema": "Course", "description": "Courses and projects" },
+    "subjects": { "schema": "Subject", "description": "Subjects per course" },
+    "topics": { "schema": "Topic", "description": "Topics per subject" },
+    "tasks": { "schema": "Task", "description": "General tasks" },
+    "daily_plans": { "schema": "DailyPlan", "description": "Daily schedules" }
+  }
+}

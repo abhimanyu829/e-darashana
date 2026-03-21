@@ -1,0 +1,7 @@
+{
+  "name": "Chronos AI: Time-Bound Execution Engine",
+  "description": "A high-performance, AI-powered academic and productivity operating system with immutable time-bound execution logic and autonomous scheduling.",
+  "requestFramePermissions": [
+    "notifications"
+  ]
+}
