@@ -15,14 +15,28 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+type FirebaseAppletConfig = {
+  projectId?: string;
+  firestoreDatabaseId?: string;
+};
+
+type TopicQueueRecord = {
+  id: string;
+  status?: "pending" | "active" | "completed" | "delayed";
+  assignedDate?: string;
+  delayCount?: number;
+};
+
+const typedFirebaseConfig = firebaseConfig as FirebaseAppletConfig;
+
 // Initialize Firebase Admin for Backend Logic (Bypasses Security Rules)
 admin.initializeApp({
-  projectId: firebaseConfig.projectId,
+  projectId: typedFirebaseConfig.projectId,
 });
 
 // Use the correct database ID directly in the firestore() call
-const db = admin.firestore(firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)" 
-  ? firebaseConfig.firestoreDatabaseId 
+const db = getFirestore(typedFirebaseConfig.firestoreDatabaseId && typedFirebaseConfig.firestoreDatabaseId !== "(default)" 
+  ? typedFirebaseConfig.firestoreDatabaseId 
   : undefined
 );
 
@@ -36,13 +50,23 @@ async function startServer() {
     },
   });
 
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
 
   app.use(express.json());
 
   // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", time: new Date().toISOString() });
+  });
+
+  app.post("/api/process-queue", async (req, res) => {
+    try {
+      await processCarryForward();
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Manual queue processing error:", error);
+      res.status(500).json({ success: false, error: String(error) });
+    }
   });
 
   // Socket.io for real-time updates (Time Engine)
@@ -59,34 +83,28 @@ async function startServer() {
   });
 
   // CORE LOGIC: Carry-Forward Engine (Using Admin SDK)
-  const processCarryForward = async () => {
+  async function processCarryForward() {
+    // Short-circuit: legacy Firestore carry-forward disabled. Backend (MongoDB/BullMQ) handles this.
     console.log("🚀 Running Carry-Forward Engine (Strict Logic Mode)...");
     const now = new Date();
     const nowIso = now.toISOString();
+    const oneDayMs = 24 * 60 * 60 * 1000;
     
     try {
-      // 1. Find all active topics that have expired across all courses
+      // Legacy Firestore references disabled
       const topicsRef = db.collection("topics");
       console.log("[CARRY-FORWARD] Fetching expired topics...");
-      const expiredSnapshot = await topicsRef
-        .where("status", "==", "active")
-        .where("deadline", "<", nowIso)
-        .get();
+      // const expiredSnapshot = await topicsRef
+      //   .where("status", "==", "active")
+      //   .where("deadline", "<", nowIso)
+      //   .get();
       
-      console.log(`[CARRY-FORWARD] Found ${expiredSnapshot.size} expired topics.`);
+      // console.log(`[CARRY-FORWARD] Found ${expiredSnapshot.size} expired topics.`);
 
-      const batch = db.batch();
-      expiredSnapshot.docs.forEach((topicDoc) => {
-        const data = topicDoc.data();
-        batch.update(topicDoc.ref, {
-          status: "delayed",
-          delayCount: (data.delayCount || 0) + 1,
-          isCarryForward: true
-        });
-      });
-      await batch.commit();
+      // const batch = db.batch();
+      let expiredUpdates = 0;
+      // (legacy disabled)
 
-      // 2. Process each active course for new assignments
       const coursesRef = db.collection("courses");
       const activeCoursesSnapshot = await coursesRef.where("status", "==", "active").get();
 
@@ -94,11 +112,10 @@ async function startServer() {
         const course = courseDoc.data();
         const courseId = courseDoc.id;
         
-        // Calculate dynamic topicsPerDay
-        // remainingTopics = totalTopics - completedTopics
         const allTopicsSnapshot = await topicsRef.where("courseId", "==", courseId).get();
-        const totalTopicsCount = allTopicsSnapshot.size;
-        const completedTopicsCount = allTopicsSnapshot.docs.filter(d => d.data().status === "completed").length;
+        const allTopics: TopicQueueRecord[] = allTopicsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as TopicQueueRecord));
+        const totalTopicsCount = allTopics.length;
+        const completedTopicsCount = allTopics.filter((topic) => topic.status === "completed").length;
         const remainingTopicsCount = totalTopicsCount - completedTopicsCount;
 
         if (remainingTopicsCount <= 0) continue;
@@ -112,50 +129,69 @@ async function startServer() {
         const topicsPerDay = Math.ceil(remainingTopicsCount / remainingDays);
         console.log(`Course: ${course.name} | Remaining Topics: ${remainingTopicsCount} | Remaining Days: ${remainingDays} | TopicsPerDay: ${topicsPerDay}`);
 
-        // Get delayed topics for this course (Highest Priority)
-        const delayedSnapshot = await topicsRef
-          .where("courseId", "==", courseId)
-          .where("status", "==", "delayed")
-          .orderBy("delayCount", "desc")
-          .get();
+        const cycleAssignedCount = allTopics.filter((topic) => {
+          if (!topic.assignedDate) return false;
+          const assignedAt = new Date(topic.assignedDate).getTime();
+          if (Number.isNaN(assignedAt)) return false;
+          return now.getTime() - assignedAt < oneDayMs && topic.status !== "pending";
+        }).length;
+
+        const remainingCapacity = Math.max(0, topicsPerDay - cycleAssignedCount);
+        if (remainingCapacity === 0) {
+          continue;
+        }
+
+        const delayedTopics = allTopics
+          .filter((topic) => {
+            if (topic.status !== "delayed") return false;
+            if (!topic.assignedDate) return true;
+            const assignedAt = new Date(topic.assignedDate).getTime();
+            if (Number.isNaN(assignedAt)) return true;
+            return now.getTime() - assignedAt >= oneDayMs;
+          })
+          .sort((a, b) => (b.delayCount || 0) - (a.delayCount || 0));
+        const pendingTopics = allTopics
+          .filter((topic) => topic.status === "pending")
+          .sort((a, b) => {
+            const indexA = (a as any).orderIndex !== undefined ? (a as any).orderIndex : 999999;
+            const indexB = (b as any).orderIndex !== undefined ? (b as any).orderIndex : 999999;
+            return indexA - indexB;
+          });
         
-        const delayedTopics = delayedSnapshot.docs;
         let assignedCount = 0;
-
         const courseBatch = db.batch();
+        let courseUpdates = 0;
 
-        // STEP 1: Assign delayed topics first
         for (const topicDoc of delayedTopics) {
-          if (assignedCount >= topicsPerDay) break;
+          if (assignedCount >= remainingCapacity) break;
           
-          courseBatch.update(topicDoc.ref, {
+          const topicRef = topicsRef.doc(topicDoc.id);
+          courseBatch.update(topicRef, {
             status: "active",
             assignedDate: nowIso,
-            deadline: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+            deadline: new Date(now.getTime() + oneDayMs).toISOString(),
             isCarryForward: true
           });
           assignedCount++;
+          courseUpdates++;
         }
 
-        // STEP 2: Fill remaining slots with new (pending) topics
-        if (assignedCount < topicsPerDay) {
-          const pendingSnapshot = await topicsRef
-            .where("courseId", "==", courseId)
-            .where("status", "==", "pending")
-            .limit(topicsPerDay - assignedCount)
-            .get();
-          
-          pendingSnapshot.docs.forEach((topicDoc) => {
-            courseBatch.update(topicDoc.ref, {
-              status: "active",
-              assignedDate: nowIso,
-              deadline: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-              isCarryForward: false
-            });
+        for (const topicDoc of pendingTopics) {
+          if (assignedCount >= remainingCapacity) break;
+          const topicRef = topicsRef.doc(topicDoc.id);
+          courseBatch.update(topicRef, {
+            status: "active",
+            assignedDate: nowIso,
+            deadline: new Date(now.getTime() + oneDayMs).toISOString(),
+            isCarryForward: false
           });
+          assignedCount++;
+          courseUpdates++;
         }
         
-        await courseBatch.commit();
+        if (courseUpdates > 0) {
+          await courseBatch.commit();
+        }
       }
 
       io.emit("system-update", { type: "CARRY_FORWARD_COMPLETE" });
@@ -166,71 +202,22 @@ async function startServer() {
 
   // CRON JOBS
   // 1. Midnight Job: Carry-Forward Engine
-  cron.schedule("0 0 * * *", async () => {
-    await processCarryForward();
-  });
+  // Disabled legacy cron (MongoDB/BullMQ in backend handles midnight tasks)
+  // cron.schedule("0 0 * * *", async () => {
+  //   await processCarryForward();
+  // });
 
   // 2. Every Minute: Sync Countdown & Check for immediate expirations or empty queues
-  cron.schedule("* * * * *", async () => {
-    io.emit("time-sync", { serverTime: new Date().toISOString() });
-    
-    // Check for expired topics or if any course needs new assignments
-    const now = new Date();
-    const nowIso = now.toISOString();
-    const topicsRef = db.collection("topics");
-    const coursesRef = db.collection("courses");
-
-    try {
-      // Check for expired topics
-      const expiredSnapshot = await topicsRef
-        .where("status", "==", "active")
-        .where("deadline", "<", nowIso)
-        .limit(1)
-        .get();
-
-      let needsProcessing = !expiredSnapshot.empty;
-
-      if (!needsProcessing) {
-        // Also check if any active course has 0 active topics (initial state)
-        const activeCoursesSnapshot = await coursesRef.where("status", "==", "active").get();
-        for (const courseDoc of activeCoursesSnapshot.docs) {
-          const activeTopicsSnapshot = await topicsRef
-            .where("courseId", "==", courseDoc.id)
-            .where("status", "==", "active")
-            .limit(1)
-            .get();
-          
-          if (activeTopicsSnapshot.empty) {
-            // Check if there are pending topics to assign
-            const pendingSnapshot = await topicsRef
-              .where("courseId", "==", courseDoc.id)
-              .where("status", "==", "pending")
-              .limit(1)
-              .get();
-            
-            if (!pendingSnapshot.empty) {
-              needsProcessing = true;
-              break;
-            }
-          }
-        }
-      }
-
-      if (needsProcessing) {
-        console.log("[NODE-CRON] System update needed. Triggering carry-forward...");
-        try {
-          await processCarryForward();
-          console.log("[NODE-CRON] Carry-forward completed successfully.");
-        } catch (cfError) {
-          console.error("[NODE-CRON] [ERROR] Carry-forward failed:", cfError);
-        }
-      } else {
-        console.log("[NODE-CRON] No system update needed at this time.");
-      }
-    } catch (error) {
-      console.error("[NODE-CRON] [ERROR] Minute cron job failed:", error);
-    }
-  });
+  // Keep time-sync only; do not call legacy carry-forward
+  // cron.schedule("* * * * *", async () => {
+  //   io.emit("time-sync", { serverTime: new Date().toISOString() });
+  //   try {
+  //     await processCarryForward();
+  //     console.log("[NODE-CRON] Carry-forward completed successfully.");
+  //   } catch (cfError) {
+  //     console.error("[NODE-CRON] [ERROR] Carry-forward failed:", cfError);
+  //   }
+  // });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

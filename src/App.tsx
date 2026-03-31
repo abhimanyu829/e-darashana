@@ -1,98 +1,133 @@
 import { useState, useEffect } from "react";
-import { auth, signInWithGoogle, logout, db } from "./lib/firebase";
+import { auth, signInWithGoogle, logout } from "./lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { Layout } from "./components/Layout";
 import { CourseManager } from "./components/CourseManager";
 import { DailyPlanner } from "./components/DailyPlanner";
 import { Analytics } from "./components/Analytics";
 import { Auth } from "./components/Auth";
-import { Course, SectionType, Topic, Task } from "./types";
+import { Course, SectionType, Task } from "./types";
 import { Loader2 } from "lucide-react";
+import { courseApi, taskApi } from "./lib/api";
+import { connectSocket, disconnectSocket, socket } from "./lib/socket";
+import { requestAndSubscribe } from "./services/pushNotificationService";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<SectionType>("academic");
   const [courses, setCourses] = useState<Course[]>([]);
-  const [topics, setTopics] = useState<Topic[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [serverTime, setServerTime] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
+      if (user) {
+        connectSocket(user.uid);
+      } else {
+        disconnectSocket();
+      }
     });
     return () => unsubscribe();
   }, []);
 
+  // ── Push Notification Subscription (non-destructive hook) ─────────────────
   useEffect(() => {
     if (!user) return;
-
-    // Listen to courses
-    const qCourses = query(collection(db, "courses"), where("userId", "==", user.uid));
-    const unsubCourses = onSnapshot(qCourses, (snapshot) => {
-      setCourses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course)));
+    user.getIdToken().then((token) => {
+      requestAndSubscribe(user.uid, token).catch(() => {}); // silent — never breaks app
     });
+  }, [user?.uid]);
+  // ─────────────────────────────────────────────────────────────────────────
 
-    // Listen to tasks
-    const qTasks = query(collection(db, "tasks"), where("userId", "==", user.uid));
-    const unsubTasks = onSnapshot(qTasks, (snapshot) => {
-      setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
+  const fetchData = async () => {
+    try {
+      const coursesRes = await courseApi.getCourses();
+      setCourses(coursesRes.data);
+
+      // Phase 4: Frontend Isolation - Fetch tasks only for the active section
+      const tasksRes = await taskApi.getTodayTasks(undefined, activeSection);
+      setTasks(tasksRes.data);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    fetchData();
+
+    // STEP 15: REAL-TIME RULE (Sync timers using server time)
+    socket.on('time-sync', ({ serverTime }) => {
+      setServerTime(serverTime);
     });
 
     return () => {
-      unsubCourses();
-      unsubTasks();
+      socket.off('time-sync');
     };
-  }, [user]);
+  }, [user, activeSection]);
 
-  if (loading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-zinc-950 text-white">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+      <div className="h-screen w-screen flex items-center justify-center bg-background text-foreground font-serif transition-colors">
+        <Loader2 className="w-8 h-8 animate-spin text-[#da7756]" />
       </div>
-    );
-  }
 
   if (!user) {
     return <Auth onLogin={signInWithGoogle} />;
   }
 
   return (
-    <Layout 
-      user={user} 
-      activeSection={activeSection} 
+    <Layout
+      user={user}
+      activeSection={activeSection}
       onSectionChange={setActiveSection}
       onLogout={logout}
     >
       <div className="space-y-8">
         <header className="flex flex-col gap-2">
-          <h1 className="text-4xl font-bold tracking-tight text-white capitalize">
-            {activeSection} Engine
-          </h1>
-          <p className="text-zinc-400">
-            Real-time execution and autonomous scheduling for your {activeSection} goals.
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight text-foreground capitalize font-serif mb-1">
+                Karyadarshana {activeSection}
+              </h1>
+              <p className="text-muted font-serif">
+                Systematic execution and management for your {activeSection} objectives.
+              </p>
+            </div>
+              <div className="flex flex-col items-end">
+                <span className="text-xs text-muted uppercase font-bold tracking-wider mb-1">Standard Time</span>
+                <div className="text-xl md:text-2xl font-bold font-mono text-[#da7756] bg-[#da7756]/10 px-4 py-2 border border-[#da7756]/20 shadow-sm">
+                  {new Date(serverTime).toLocaleString(undefined, {
+                    weekday: 'short', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                  })}
+                </div>
+              </div>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           <div className="xl:col-span-2 space-y-8">
-            <DailyPlanner 
+            <DailyPlanner
               user={user}
               section={activeSection}
               courses={courses.filter(c => c.section === activeSection)}
-              tasks={tasks.filter(t => t.section === activeSection)}
+              tasks={tasks}
+              serverTime={serverTime}
+              onTaskUpdated={fetchData}
             />
           </div>
           <div className="space-y-8">
-            <CourseManager 
+            <CourseManager
               user={user}
               section={activeSection}
               courses={courses.filter(c => c.section === activeSection)}
+              onCourseAdded={fetchData}
             />
-            <Analytics 
-              tasks={tasks.filter(t => t.section === activeSection)}
+            <Analytics
+              tasks={tasks}
+              section={activeSection}
             />
           </div>
         </div>

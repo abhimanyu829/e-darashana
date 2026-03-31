@@ -1,4 +1,4 @@
-export type SectionType = 'academic' | 'project' | 'placement' | 'skills' | 'business' | 'other';
+export type SectionType = 'academic' | 'exam' | 'skill' | 'placement' | 'project' | 'othertasks';
 
 export interface User {
   uid: string;
@@ -8,59 +8,66 @@ export interface User {
 }
 
 export interface Course {
-  id?: string;
+  _id?: string;
+  id?: string; // Compatibility
   userId: string;
   section: SectionType;
   name: string;
   durationDays: number;
-  startDate: string;
-  endDate: string;
   dailyStudyHours: number;
-  isImmutable: boolean;
-  status: 'active' | 'completed' | 'archived';
-}
-
-export interface Subject {
-  id?: string;
-  courseId: string;
-  name: string;
-  priorityIndex: number;
-  color: string;
+  syllabusText?: string;
+  createdAt: string;
 }
 
 export interface Topic {
-  id?: string;
-  subjectId: string;
+  _id?: string;
+  id?: string; // Compatibility
+  topicTitle: string;
+  globalOrderIndex: number;
+}
+
+export interface Unit {
+  _id?: string;
+  unitName: string;
+  topics: Topic[];
+}
+
+export interface TopicsMaster {
+  _id?: string;
   courseId: string;
-  name: string;
-  status: 'pending' | 'active' | 'completed' | 'delayed';
-  assignedDate?: string;
-  deadline?: string;
-  estimatedTime: number;
-  isLocked: boolean;
-  delayCount: number;
-  isCarryForward: boolean;
+  userId: string;
+  units: Unit[];
+  createdAt: string;
 }
 
 export interface Task {
-  id?: string;
-  userId: string;
-  section: SectionType;
-  topicId?: string;
-  title: string;
-  description?: string;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  status: 'todo' | 'in-progress' | 'completed' | 'deferred';
-  canDoToday: boolean;
-  isDeferred: boolean;
-  nextAssignedDate?: string;
-  productivityImpactScore: number;
+  _id?: string;
+  id?: string; // Compatibility
+  topicId: string;
+  topicTitle: string;
+  globalOrderIndex: number;
+  assignedAt: string;
+  deadline: string;
+  status: 'active' | 'completed' | 'delayed';
+  checkbox: boolean;
 }
 
-export interface DailyPlan {
-  id?: string;
+export interface DailyTask {
+  _id?: string;
   userId: string;
+  courseId: string;
   date: string;
-  activeSubjects: string[];
-  totalHours: number;
+  tasks: Task[];
 }
+
+export interface ActivityLog {
+  _id?: string;
+  userId: string;
+  section: SectionType | string;
+  date: string;
+  completedTasks: number;
+  totalTasks: number;
+  delayedTasks: number;
+  score: number;
+}
+

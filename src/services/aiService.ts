@@ -1,8 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const getAiClient = () => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY_MISSING");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const parseSyllabus = async (text: string) => {
+  const ai = getAiClient();
   const model = "gemini-3-flash-preview";
   const prompt = `
     Parse the following syllabus text into a structured JSON format.
@@ -39,6 +46,7 @@ export const parseSyllabus = async (text: string) => {
 };
 
 export const suggestOptimalSchedule = async (tasks: any[], dailyHours: number) => {
+  const ai = getAiClient();
   const model = "gemini-3-flash-preview";
   const prompt = `
     Given the following tasks and a daily limit of ${dailyHours} hours, suggest the most optimal execution order.

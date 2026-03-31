@@ -1,1 +1,61 @@
 @import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #da7756;
+  --color-brand-secondary: #000000;
+  
+  --color-background: var(--background);
+  --color-foreground: var(--text-primary);
+  --color-muted: var(--text-secondary);
+  --color-border: var(--border);
+  --color-card: var(--card);
+}
+
+@layer base {
+  :root {
+    --background: #ffffff;
+    --text-primary: #000000;
+    --text-secondary: #52525b;
+    --border: #e4e4e7;
+    --card: #f4f4f5;
+  }
+
+  .dark {
+    --background: #09090b;
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --border: #27272a;
+    --card: #18181b;
+  }
+
+  * {
+    border-color: var(--border);
+    font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif !important;
+    border-radius: 0 !important;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* Custom global rules for square corners */
+button, input, select, textarea, [class*="rounded-"] {
+  border-radius: 0 !important;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #da7756;
+  border-radius: 0 !important;
+}
