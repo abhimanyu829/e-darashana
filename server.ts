@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -45,13 +46,26 @@ async function startServer() {
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
-      origin: "*",
+      origin: [
+        "https://e-darashana-frontend.onrender.com",
+        "https://abhibhi.in"
+      ],
       methods: ["GET", "POST"],
-    },
+      credentials: true
+    }
   });
 
   const PORT = Number(process.env.PORT || 3000);
 
+  app.use(
+    cors({
+      origin: [
+        "https://e-darashana-frontend.onrender.com",
+        "https://abhibhi.in"
+      ],
+      credentials: true
+    })
+  );
   app.use(express.json());
 
   // API Routes
