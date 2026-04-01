@@ -70,7 +70,6 @@ async function startServer() {
   
   // API Routes
 
-  // 1. GET /api/courses
   app.get("/api/courses", async (req, res) => {
     try {
       const snapshot = await db.collection("courses").get();
@@ -80,12 +79,11 @@ async function startServer() {
       }));
       res.status(200).json(courses);
     } catch (error) {
-      console.error("Error fetching courses:", error);
+      console.error("Error fetching courses from backend:", error);
       res.status(500).json({ error: "Failed to fetch courses" });
     }
   });
 
-  // 2. POST /api/courses
   app.post("/api/courses", async (req, res) => {
     try {
       const courseData = req.body;
@@ -95,12 +93,11 @@ async function startServer() {
       });
       res.status(201).json({ success: true, id: docRef.id });
     } catch (error) {
-      console.error("Error creating course:", error);
+      console.error("Error creating course from backend:", error);
       res.status(500).json({ error: "Failed to create course" });
     }
   });
 
-  // 3. POST /api/notifications/subscribe
   app.post("/api/notifications/subscribe", async (req, res) => {
     try {
       const { subscription } = req.body;
@@ -114,7 +111,7 @@ async function startServer() {
       });
       res.status(200).json({ success: true });
     } catch (error) {
-      console.error("Push subscribe error:", error);
+      console.error("Backend push subscribe error:", error);
       res.status(500).json({ error: "Failed to save push subscription" });
     }
   });
