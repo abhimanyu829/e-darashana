@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { User } from "firebase/auth";
+import { User } from "../lib/firebase";
 import { Course, SectionType } from "../types";
 import { Plus, Calendar, Clock, Shield, Trash2, BrainCircuit, Layers } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { SyllabusParser } from "./SyllabusParser";
 import { TopicManager } from "./TopicManager";
 import { CourseDashboard } from "./CourseDashboard";
-import { courseApi } from "../lib/api";
-import { auth } from "../lib/firebase";
+import api, { courseApi } from "../lib/api";
+
 
 interface CourseManagerProps {
   user: User;
@@ -26,10 +26,8 @@ export function CourseManager({ user, section, courses, onCourseAdded }: CourseM
   const [hours, setHours] = useState<string | number>(4);
 
   const handleAddCourse = async () => {
-    if (!name) return;
 
     try {
-      const user = auth.currentUser;
       if (!user) {
         alert("Please login first");
         return;
@@ -60,9 +58,9 @@ export function CourseManager({ user, section, courses, onCourseAdded }: CourseM
       setName("");
       setIsAdding(false);
       onCourseAdded?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding course:", error);
-      alert("Failed to create course. Please try again.");
+      alert(error.response?.data?.message || "Failed to create course. Please try again.");
     }
   };
 

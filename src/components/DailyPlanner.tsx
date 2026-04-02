@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User } from "firebase/auth";
+import { User } from "../lib/firebase";
 import { Course, SectionType, Task } from "../types";
 import { 
   CheckCircle2, 
@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { format, differenceInSeconds } from "date-fns";
 import { cn } from "../lib/utils";
-import { taskApi } from "../lib/api";
+import api from "../lib/api";
 
 interface DailyPlannerProps {
   user: User;
@@ -46,7 +46,7 @@ export function DailyPlanner({ user, section, courses, tasks, serverTime, onTask
   const handleToggleTask = async (task: any) => {
     const today = new Date().toISOString().split('T')[0];
     try {
-      await taskApi.updateTaskStatus(today, task._id || task.id, !task.checkbox);
+      await api.patch("/tasks/status", { date: today, taskId: task._id || task.id, checkbox: !task.checkbox });
       onTaskUpdated?.();
     } catch (error) {
       console.error("Error toggling task:", error);

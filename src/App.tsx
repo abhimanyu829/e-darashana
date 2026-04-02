@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { auth, signInWithGoogle, logout } from "./lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { signInWithGoogle, logout, onAuthStateChanged, getCurrentUser, getAuthToken, User } from "./lib/firebase";
 import { Layout } from "./components/Layout";
 import { CourseManager } from "./components/CourseManager";
 import { DailyPlanner } from "./components/DailyPlanner";
@@ -21,7 +20,7 @@ export default function App() {
   const [serverTime, setServerTime] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged((user) => {
       setUser(user);
       setLoading(false);
       if (user) {
@@ -36,9 +35,10 @@ export default function App() {
   // ── Push Notification Subscription (non-destructive hook) ─────────────────
   useEffect(() => {
     if (!user) return;
-    user.getIdToken().then((token) => {
+    const token = getAuthToken();
+    if (token) {
       requestAndSubscribe(user.uid, token).catch(() => {}); // silent — never breaks app
-    });
+    }
   }, [user?.uid]);
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -73,8 +73,18 @@ export default function App() {
         <Loader2 className="w-8 h-8 animate-spin text-[#da7756]" />
       </div>
 
+  const handleGoogleLogin = async (credential: string) => {
+    try {
+      const loggedInUser = await signInWithGoogle(credential);
+      setUser(loggedInUser as any); // VERY IMPORTANT
+      await fetchData(); // dashboard APIs
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
+  };
+
   if (!user) {
-    return <Auth onLogin={signInWithGoogle} />;
+    return <Auth onLogin={handleGoogleLogin as any} />;
   }
 
   return (
@@ -82,7 +92,10 @@ export default function App() {
       user={user}
       activeSection={activeSection}
       onSectionChange={setActiveSection}
-      onLogout={logout}
+      onLogout={() => {
+        logout();
+        setUser(null);
+      }}
     >
       <div className="space-y-8">
         <header className="flex flex-col gap-2">

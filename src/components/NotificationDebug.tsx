@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Bell, BellOff, Send, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { requestAndSubscribe } from '../services/pushNotificationService';
-import { getAuth } from 'firebase/auth';
+import { getCurrentUser, getAuthToken } from '../lib/firebase';
 import { cn } from '../lib/utils';
 
 export function NotificationDebug() {
@@ -23,11 +23,11 @@ export function NotificationDebug() {
     setStatus('idle');
     setError(null);
     try {
-      const auth = getAuth();
-      const user = auth.currentUser;
+      const user = getCurrentUser();
       if (!user) throw new Error('User not logged in');
       
-      const token = await user.getIdToken();
+      const token = getAuthToken();
+      if (!token) throw new Error('No auth token available');
       await requestAndSubscribe(user.uid, token);
       
       setStatus('success');

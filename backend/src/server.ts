@@ -26,6 +26,9 @@ initSocket(httpServer);
 app.use(cors());
 app.use(express.json());
 
+import authRoutes from './routes/authRoutes';
+
+app.use('/api', authRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/syllabus', syllabusRoutes);
 app.use('/api/tasks', taskRoutes);

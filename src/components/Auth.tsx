@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { LogIn, Shield, Zap } from "lucide-react";
+import { Shield, Zap } from "lucide-react";
+import { GoogleLogin } from '@react-oauth/google';
 import { motion } from "motion/react";
 
 interface AuthProps {
-  onLogin: () => Promise<unknown>;
+  onLogin: (credential: string) => Promise<unknown>;
 }
 
 const Sunrays = () => {
@@ -45,17 +46,14 @@ const Sunrays = () => {
 export function Auth({ onLogin }: AuthProps) {
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async () => {
+  const handleSuccess = async (response: any) => {
     try {
       setError(null);
-      await onLogin();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("auth/unauthorized-domain")) {
-        setError("Google sign-in is blocked for this host. Add localhost to Firebase Authentication authorized domains.");
-      } else {
-        setError("Sign-in failed. Please try again.");
+      if (response.credential) {
+        await onLogin(response.credential);
       }
+    } catch (err) {
+      setError("Sign-in failed. Please try again.");
     }
   };
 
@@ -105,13 +103,22 @@ export function Auth({ onLogin }: AuthProps) {
             </div>
           </div>
 
-          <button
-            onClick={handleLogin}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-zinc-200 text-black font-bold py-4 rounded-none transition-all active:scale-[0.98]"
-          >
-            <LogIn className="w-5 h-5" />
-            Sign in with Google
-          </button>
+          <div className="w-full flex justify-center py-2">
+            {(() => {
+              const CustomGoogleLogin = GoogleLogin as any;
+              return (
+                <CustomGoogleLogin
+                  onSuccess={handleSuccess}
+                  onError={() => setError("Google Sign-In was cancelled or failed.")}
+                  theme="outline"
+                  size="large"
+                  width="100%"
+                  auto_select={false}
+                  prompt="consent select_account"
+                />
+              );
+            })()}
+          </div>
           
           {error && <p className="text-sm text-red-400 text-center font-serif">{error}</p>}
           

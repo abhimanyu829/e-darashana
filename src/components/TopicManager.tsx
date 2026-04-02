@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { TopicsMaster, Unit, Topic } from "../types";
 import { X, Layers, AlertCircle, Clock, Trash2 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { courseApi } from "../lib/api";
+import api from "../lib/api";
 
 interface TopicManagerProps {
   courseId: string;
@@ -17,7 +17,7 @@ export function TopicManager({ courseId, courseName, onClose }: TopicManagerProp
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await courseApi.getTopics(courseId);
+        const res = await api.get(`/courses/${courseId}/topics`);
         setTopicsMaster(res.data);
         setLoading(false);
       } catch (error) {

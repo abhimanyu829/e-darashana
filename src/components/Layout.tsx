@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { User } from "firebase/auth";
+import { User } from "../lib/firebase";
 import { 
   BookOpen, 
   Briefcase, 
